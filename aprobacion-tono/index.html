@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIVES — Seguimiento Aprobación de Tono</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<style>
+:root{
+  --header:#0E3B36;
+  --acento:#10B981;
+  --apro:#2a9d8f;
+  --rech:#e63946;
+  --amb:#e9c46a;
+  --gris:#9AA8A4;
+  --money:#F59E0B;
+  --bg:#F1F6F4;
+  --panel:#FFFFFF;
+  --borde:#D8E2DE;
+  --texto:#22312E;
+  --texto2:#5F726D;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Calibri,Arial,sans-serif;background:var(--bg);color:var(--texto);font-size:14px;line-height:1.4}
+
+.lives-header{background:var(--header);color:#fff;padding:0 32px;height:72px;display:flex;align-items:center;gap:18px}
+.lives-header .logo{font-size:24px;font-weight:300;letter-spacing:8px}
+.lives-header .sep{width:1px;height:34px;background:rgba(255,255,255,.3)}
+.lives-header h1{font-size:16px;font-weight:400;letter-spacing:2px;text-transform:uppercase}
+.lives-header .sub{font-size:12px;color:#BFD8D2;margin-left:auto;text-align:right}
+
+/* ZONA DE CARGA */
+#uploadZone{max-width:760px;margin:60px auto;background:var(--panel);border:2px dashed var(--borde);border-radius:10px;padding:56px 40px;text-align:center;cursor:pointer;transition:.15s}
+#uploadZone.drag{border-color:var(--acento);background:#EAF7F1}
+#uploadZone h2{font-weight:400;font-size:20px;margin-bottom:8px}
+#uploadZone p{color:var(--texto2);font-size:13px}
+#uploadZone .btn{display:inline-block;margin-top:18px;background:var(--acento);color:#fff;padding:10px 28px;border-radius:6px;font-size:14px;letter-spacing:.5px}
+#uploadZone .hint{margin-top:16px;font-size:11.5px;color:var(--texto2)}
+#fileInput{display:none}
+#errBox{max-width:760px;margin:14px auto;background:#FDECEC;border-left:4px solid var(--rech);padding:12px 16px;font-size:13px;color:#7a1f27;border-radius:4px;display:none}
+
+/* BARRA DE FILTROS */
+.filters-bar{background:var(--panel);border-bottom:1px solid var(--borde);padding:10px 32px;position:sticky;top:0;z-index:50;display:none;flex-wrap:wrap;gap:10px;align-items:center}
+.f-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--texto2);margin-right:2px}
+.chip{border:1px solid var(--borde);background:#fff;color:var(--texto2);padding:5px 14px;border-radius:20px;cursor:pointer;font-size:12.5px;font-family:inherit}
+.chip.on{background:var(--header);border-color:var(--header);color:#fff}
+.msel{position:relative}
+.msel>button{border:1px solid var(--borde);background:#fff;color:var(--texto);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12.5px;font-family:inherit;min-width:130px;text-align:left}
+.msel>button span.n{color:var(--acento);font-weight:bold}
+.msel .dd{display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid var(--borde);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.12);min-width:230px;max-height:300px;overflow:auto;z-index:60;padding:6px}
+.msel.open .dd{display:block}
+.dd .acts{display:flex;gap:14px;padding:4px 8px 8px;border-bottom:1px solid var(--borde);margin-bottom:4px}
+.dd .acts a{color:var(--acento);font-size:11px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;text-decoration:none}
+.dd label{display:flex;gap:8px;align-items:center;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px}
+.dd label:hover{background:var(--bg)}
+.dd input[type=checkbox]{accent-color:var(--acento)}
+.f-reset{margin-left:auto;color:var(--rech);background:none;border:none;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;font-family:inherit}
+#reload{color:var(--texto2);background:none;border:1px solid var(--borde);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit}
+#btnExport{background:var(--acento);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;letter-spacing:.3px;cursor:pointer;font-family:inherit}
+#btnExport:hover{background:#0d9e6f}
+
+/* TABS */
+.tabs{display:none;padding:14px 32px 0;gap:8px}
+.tab{background:#fff;border:1px solid var(--borde);border-bottom:none;padding:10px 22px;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:var(--texto2);font-family:inherit}
+.tab.on{background:var(--header);color:#fff;border-color:var(--header)}
+
+main{padding:0 32px 40px;display:none}
+.view{display:none}
+.view.on{display:block}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}
+.kpi-card{background:var(--panel);border:1px solid var(--borde);border-radius:6px;padding:18px 20px}
+.kpi-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--texto2);margin-bottom:6px}
+.kpi-card .val{font-size:28px;font-weight:bold;color:var(--header)}
+.kpi-card.primary{border:2px solid var(--acento);background:#FBFDFC}
+.kpi-card.primary .val{font-size:36px;color:var(--apro)}
+.kpi-card .val.rech{color:var(--rech)}
+.kpi-card .val.amb{color:#b98b1f}
+.kpi-card .val.gris{color:var(--gris)}
+.kpi-card .sub{font-size:11.5px;color:var(--texto2);margin-top:4px}
+
+.nota{background:#fff;border-left:4px solid var(--money);padding:10px 14px;font-size:11.5px;color:var(--texto2);border-radius:0 4px 4px 0;margin:10px 0}
+
+.panel{background:var(--panel);border:1px solid var(--borde);border-radius:8px;padding:18px 20px;margin:16px 0}
+.panel h3{font-weight:400;font-size:15px;letter-spacing:.5px;margin-bottom:12px;color:var(--texto)}
+.chart-wrap{position:relative;height:300px}
+
+/* RESUMEN GLOBAL */
+.pies{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.pie-wrap{position:relative;height:240px}
+.pie-leg{margin-top:12px;font-size:12.5px}
+.pie-leg .li{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #EDF2F0}
+.pie-leg .li:last-child{border-bottom:none}
+.pie-leg .dot{display:inline-block;width:10px;height:10px;border-radius:5px;margin-right:8px;vertical-align:baseline}
+.pie-leg .v{font-weight:bold}
+
+/* TABLAS */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--texto2);border-bottom:2px solid var(--borde);padding:8px 10px;font-weight:normal}
+th.num,td.num{text-align:right}
+td{padding:8px 10px;border-bottom:1px solid #EDF2F0}
+tr.trow:hover td{background:#F7FBF9}
+.pct-apro{color:var(--apro);font-weight:bold}
+.pct-rech{color:var(--rech);font-weight:bold}
+.pct-amb{color:#b98b1f;font-weight:bold}
+td.gris{color:var(--gris)}
+.stackbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#EDF2F0;min-width:120px}
+.stackbar div{height:100%}
+.btn-det{background:none;border:1px solid var(--borde);color:var(--header);padding:4px 12px;border-radius:5px;cursor:pointer;font-size:11.5px;font-family:inherit}
+.btn-det:hover{background:var(--header);color:#fff;border-color:var(--header)}
+tr.detrow{display:none}
+tr.detrow.open{display:table-row}
+tr.detrow>td{background:#F7FAF9;padding:14px 18px}
+.dettbl th{font-size:10px;padding:5px 8px}
+.dettbl td{font-size:12px;padding:5px 8px;border-bottom:1px solid #E4ECE9}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;color:#fff}
+.b-apro{background:var(--apro)} .b-rech{background:var(--rech)} .b-amb{background:var(--amb);color:#5c4a10} .b-gris{background:#9AA8A4}
+
+/* TARJETAS POR CLIENTE */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:16px}
+.ccard{background:var(--panel);border:1px solid var(--borde);border-radius:8px;padding:16px 18px}
+.ccard .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.ccard .cli{font-size:18px;font-weight:bold;color:var(--header);letter-spacing:1px}
+.ccard .tot{font-size:11px;color:var(--texto2)}
+.ccard .fila{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0}
+.ccard .fila .p{font-weight:bold}
+.ccard .sinresp{font-size:11px;color:var(--gris);margin-top:6px}
+.vacio{padding:30px;text-align:center;color:var(--texto2);font-size:13px}
+footer{padding:14px 32px 30px;font-size:11px;color:var(--texto2);display:none}
+
+@media print{
+  .filters-bar,.tabs,#reload,#btnExport,.btn-det{display:none !important}
+  body{background:#fff}
+  .view{display:block !important;page-break-after:always}
+  main{display:block !important;padding:0 10mm}
+  @page{size:A4;margin:10mm}
+}
+</style>
+</head>
+<body>
+
+<header class="lives-header">
+  <div class="logo">LIVES</div>
+  <div class="sep"></div>
+  <h1>Seguimiento Aprobación de Tono</h1>
+  <div class="sub">Calidad Textil<br><span id="hdrInfo"></span></div>
+</header>
+
+<div id="uploadZone">
+  <h2>Cargar archivo de seguimiento</h2>
+  <p>Arrastra aquí el Excel <b>SEGUIMIENTO APROB TONO CLIENTES</b> o haz clic para seleccionarlo.</p>
+  <div class="btn">Seleccionar archivo</div>
+  <div class="hint">Se leen las hojas <b>APROBACIÓN CLIENTE</b> y <b>APROBACIÓN INTERNA</b> (detectadas por sus columnas de status; también se acepta el formato antiguo de hoja única TOTAL). Todo se procesa en tu navegador; nada se sube a internet.</div>
+</div>
+<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
+<div id="errBox"></div>
+
+<div class="filters-bar" id="filtersBar">
+  <span class="f-label">Año</span><span id="fAnios"></span>
+  <span class="f-label">Mes</span>
+  <div class="msel" id="mselMes"><button></button><div class="dd"></div></div>
+  <span class="f-label">Cliente</span>
+  <div class="msel" id="mselCli"><button></button><div class="dd"></div></div>
+  <span class="f-label">Tintorería</span>
+  <div class="msel" id="mselTin"><button></button><div class="dd"></div></div>
+  <span class="f-label">Broker</span>
+  <div class="msel" id="mselBro"><button></button><div class="dd"></div></div>
+  <button class="f-reset" id="btnReset">Limpiar filtros</button>
+  <button id="btnExport">⬇ Exportar para observadores</button>
+  <button id="reload">Cargar otro archivo</button>
+</div>
+
+<div class="tabs" id="tabsBar">
+  <button class="tab on" data-v="vGlobal">Resumen Global</button>
+  <button class="tab" data-v="vCliente">Status Cliente</button>
+  <button class="tab" data-v="vInterno">Status Interno</button>
+  <button class="tab" data-v="vCards">Tarjetas por Cliente</button>
+</div>
+
+<main id="main">
+
+  <!-- VISTA RESUMEN GLOBAL -->
+  <section class="view on" id="vGlobal">
+    <div class="kpis" id="kpiGlobal"></div>
+    <div class="nota"><b>Regla del status global por partida:</b> RECHAZADO si el interno o el cliente la rechazó; PENDIENTE si no hay rechazo pero está pendiente o sin respuesta del cliente; APROBADO si el cliente aprobó. Las partidas <b>sin respuesta del cliente</b> se muestran en gris en la torta de cliente (misma convención que el pivot del Excel: no entran al % aprobado cliente), pero sí cuentan como pendientes en el status global.</div>
+    <div class="pies">
+      <div class="panel"><h3>Status Cliente</h3><div class="pie-wrap"><canvas id="pieCliente"></canvas></div><div class="pie-leg" id="legCliente"></div></div>
+      <div class="panel"><h3>Status Interno</h3><div class="pie-wrap"><canvas id="pieInterno"></canvas></div><div class="pie-leg" id="legInterno"></div></div>
+      <div class="panel"><h3>Status Global</h3><div class="pie-wrap"><canvas id="pieGlobal"></canvas></div><div class="pie-leg" id="legGlobal"></div></div>
+    </div>
+  </section>
+
+  <!-- VISTA STATUS CLIENTE -->
+  <section class="view" id="vCliente">
+    <div class="kpis" id="kpiCliente"></div>
+    <div class="nota">El % aprobado se calcula sobre partidas <b>respondidas</b> por el cliente (aprobadas + pendientes + rechazadas), igual que el dashboard del Excel. Las enviadas sin respuesta se muestran aparte en gris.</div>
+    <div class="panel">
+      <h3>Evolución mensual — Status Cliente</h3>
+      <div class="chart-wrap"><canvas id="chCliente"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Ranking por cliente</h3>
+      <div id="tblCliCliente"></div>
+    </div>
+    <div class="panel">
+      <h3>Ranking por tintorería</h3>
+      <div id="tblTinCliente"></div>
+    </div>
+  </section>
+
+  <!-- VISTA STATUS INTERNO -->
+  <section class="view" id="vInterno">
+    <div class="nota">Esta vista se calcula directamente sobre la hoja <b>APROBACIÓN INTERNA</b>. Las partidas enviadas al cliente que no figuran en esa hoja se reportan como "sin registro interno".</div>
+    <div class="kpis" id="kpiInterno"></div>
+    <div class="panel">
+      <h3>Evolución mensual — Status Interno (solo registradas)</h3>
+      <div class="chart-wrap"><canvas id="chInterno"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Ranking por cliente — Status Interno</h3>
+      <div id="tblCliInterno"></div>
+    </div>
+    <div class="panel">
+      <h3>Ranking por tintorería — Status Interno</h3>
+      <div id="tblTinInterno"></div>
+    </div>
+  </section>
+
+  <!-- VISTA TARJETAS -->
+  <section class="view" id="vCards">
+    <div class="nota">Tarjetas equivalentes a la pestaña DASHBOARD del Excel (status cliente): el total y los % son sobre partidas <b>respondidas</b>; las sin respuesta se indican debajo. Códigos con espacios extra se unifican automáticamente.</div>
+    <div class="cards-grid" id="cardsGrid"></div>
+  </section>
+
+</main>
+
+<footer id="foot">Confidencial — Uso Interno · LIVES S.A.C. · Dashboard generado localmente desde el archivo cargado.</footer>
+
+<script>
+/* ================= CONFIG ================= */
+const C = { apro:'#2a9d8f', rech:'#e63946', amb:'#e9c46a', gris:'#9AA8A4', header:'#0E3B36', acento:'#10B981' };
+const MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SETIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+const MES_CORTO = {ENERO:'Ene',FEBRERO:'Feb',MARZO:'Mar',ABRIL:'Abr',MAYO:'May',JUNIO:'Jun',JULIO:'Jul',AGOSTO:'Ago',SETIEMBRE:'Set',OCTUBRE:'Oct',NOVIEMBRE:'Nov',DICIEMBRE:'Dic'};
+Chart.defaults.font.family = 'Calibri, Arial, sans-serif';
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#5F726D';
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(14,59,54,0.95)';
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.cornerRadius = 4;
+
+const fmtInt = n => (n||0).toLocaleString('es-PE');
+const fmtPct = n => isFinite(n) ? (n*100).toFixed(1).replace('.',',') + '%' : '—';
+const norm = v => (v===null||v===undefined) ? '' : String(v).trim().toUpperCase().replace(/\s+/g,' ');
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtFecha = v => {
+  if(!v) return '';
+  const d = (v instanceof Date) ? v : new Date(v);
+  return isNaN(d) ? '' : d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
+};
+
+/* ================= ESTADO ================= */
+let DATA = [];      // universo: hoja APROBACIÓN CLIENTE (scli: APROBADO/PENDIENTE/RECHAZADO/'' = sin respuesta; sint del cruce: ''=sin registro)
+let DATAINT = [];   // hoja APROBACIÓN INTERNA tal cual
+let charts = {};
+let F = { anio:null, meses:new Set(), clientes:new Set(), tins:new Set(), bros:new Set() };
+let DIM = { anios:[], meses:[], clientes:[], tins:[], bros:[] };
+let FNAME = '';
+
+/* ================= CARGA DE ARCHIVO ================= */
+const zone = document.getElementById('uploadZone');
+const inp = document.getElementById('fileInput');
+zone.addEventListener('click', ()=>inp.click());
+zone.addEventListener('dragover', e=>{e.preventDefault();zone.classList.add('drag');});
+zone.addEventListener('dragleave', ()=>zone.classList.remove('drag'));
+zone.addEventListener('drop', e=>{e.preventDefault();zone.classList.remove('drag'); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);});
+inp.addEventListener('change', ()=>{ if(inp.files[0]) leerArchivo(inp.files[0]); });
+document.getElementById('reload').addEventListener('click', ()=>location.reload());
+
+function error(msg){ const b=document.getElementById('errBox'); b.textContent=msg; b.style.display='block'; }
+
+function leerArchivo(file){
+  document.getElementById('errBox').style.display='none';
+  const rd = new FileReader();
+  rd.onload = e => {
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      let hCli=null, hInt=null, hTotal=null;
+      for(const n of wb.SheetNames){
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, defval:null, range:0});
+        if(!rows.length || !rows[0]) continue;
+        const hdr = rows[0].map(norm);
+        const tCli = hdr.includes('STATUS CLIENTE'), tInt = hdr.includes('STATUS INTERNO');
+        if(tCli && tInt && !hTotal) hTotal = rows;
+        else if(tCli && !tInt && !hCli) hCli = rows;
+        else if(tInt && !tCli && !hInt) hInt = rows;
+      }
+      if(hCli){ procesarSeparado(hCli, hInt, file.name); }
+      else if(hTotal){ procesarUnificado(hTotal, file.name); }
+      else { error('No encontré hojas con columnas "STATUS CLIENTE" / "STATUS INTERNO". Verifica que sea el archivo de seguimiento de tono.'); }
+    }catch(err){ error('No se pudo leer el archivo: ' + err.message); }
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+function mapaCols(hdr){
+  const ix = name => hdr.indexOf(name);
+  return {
+    mes: ix('MES'), anio: ix('AÑO')>-1?ix('AÑO'):ix('ANO'), grupo: ix('GRUPO'), item: ix('ITEM'),
+    tin: ix('TINTORERIA'), partida: ix('PARTIDA'), color: ix('COLOR'), art: ix('ARTICULO'),
+    bro: ix('BROCKER')>-1?ix('BROCKER'):ix('BROKER'),
+    scli: ix('STATUS CLIENTE'), sint: ix('STATUS INTERNO'),
+    fcli: ix('FECHA STATUS CLIENTE'), fint: ix('FECHA STATUS INTERNO'),
+    com: ix('COMENTARIOS')
+  };
+}
+
+function filaBase(r, col){
+  return {
+    mes: norm(r[col.mes]).replace('SEPTIEMBRE','SETIEMBRE'),
+    anio: Number(r[col.anio]),
+    item: norm(r[col.item]),
+    grupo: col.grupo>-1?norm(r[col.grupo]):'',
+    tin: col.tin>-1?(norm(r[col.tin])||'(SIN TINTORERÍA)'):'(SIN TINTORERÍA)',
+    partida: col.partida>-1?norm(r[col.partida]):'',
+    color: col.color>-1?norm(r[col.color]):'',
+    art: col.art>-1?norm(r[col.art]):'',
+    bro: col.bro>-1?(norm(r[col.bro])||'(SIN BROKER)'):'(SIN BROKER)',
+    com: col.com>-1?(r[col.com]?String(r[col.com]).trim():''):''
+  };
+}
+
+const llave = d => d.grupo + '|' + d.partida + '|' + d.color;
+
+/* Formato nuevo: hojas separadas */
+function procesarSeparado(rowsCli, rowsInt, fname){
+  const colC = mapaCols(rowsCli[0].map(norm));
+  if(colC.item<0 || colC.scli<0){ error('La hoja de aprobación cliente no tiene las columnas ITEM / STATUS CLIENTE.'); return; }
+  DATA = [];
+  for(let i=1;i<rowsCli.length;i++){
+    const r = rowsCli[i]; if(!r) continue;
+    const b = filaBase(r, colC);
+    if(!b.item || !b.anio) continue;              // fila válida = cliente + año (status puede estar vacío = sin respuesta)
+    b.scli = norm(r[colC.scli]);
+    b.fecha = colC.fcli>-1 ? fmtFecha(r[colC.fcli]) : '';
+    b.sint = '';                                   // se completa con el cruce
+    DATA.push(b);
+  }
+  DATAINT = [];
+  if(rowsInt){
+    const colI = mapaCols(rowsInt[0].map(norm));
+    if(colI.item>-1 && colI.sint>-1){
+      for(let i=1;i<rowsInt.length;i++){
+        const r = rowsInt[i]; if(!r) continue;
+        const b = filaBase(r, colI);
+        if(!b.item || !b.anio) continue;
+        b.sint = norm(r[colI.sint]);
+        b.fecha = colI.fint>-1 ? fmtFecha(r[colI.fint]) : '';
+        if(b.sint) DATAINT.push(b);               // solo filas con status interno
+      }
+    }
+  }
+  // Cruce interna → universo cliente por GRUPO|PARTIDA|COLOR (consumo uno a uno para respetar duplicados)
+  const pool = new Map();
+  DATAINT.forEach(d=>{
+    const k = llave(d);
+    if(!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(d.sint);
+  });
+  DATA.forEach(d=>{
+    const q = pool.get(llave(d));
+    if(q && q.length) d.sint = q.shift();
+  });
+  finalizar(fname);
+}
+
+/* Formato antiguo: hoja única con ambos status */
+function procesarUnificado(rows, fname){
+  const col = mapaCols(rows[0].map(norm));
+  if(col.item<0 || col.scli<0){ error('Faltan columnas clave (ITEM / STATUS CLIENTE).'); return; }
+  DATA = []; DATAINT = [];
+  for(let i=1;i<rows.length;i++){
+    const r = rows[i]; if(!r) continue;
+    const b = filaBase(r, col);
+    if(!b.item || !b.anio) continue;
+    b.scli = norm(r[col.scli]);
+    b.sint = col.sint>-1 ? norm(r[col.sint]) : '';
+    b.fecha = col.fcli>-1 ? fmtFecha(r[col.fcli]) : '';
+    DATA.push(b);
+    if(b.sint) DATAINT.push({...b, fecha: col.fint>-1 ? fmtFecha(r[col.fint]) : ''});
+  }
+  finalizar(fname);
+}
+
+function finalizar(fname){
+  if(!DATA.length){ error('No se encontraron filas válidas (con cliente y año).'); return; }
+  const todo = DATA.concat(DATAINT);
+  DIM.anios = [...new Set(todo.map(d=>d.anio))].sort((a,b)=>a-b);
+  DIM.meses = MESES.filter(m => todo.some(d=>d.mes===m));
+  DIM.clientes = [...new Set(todo.map(d=>d.item))].sort();
+  DIM.tins = [...new Set(todo.map(d=>d.tin))].sort();
+  DIM.bros = [...new Set(todo.map(d=>d.bro))].sort();
+
+  F.anio = DIM.anios[DIM.anios.length-1];
+  F.meses = new Set(DIM.meses);
+  F.clientes = new Set(DIM.clientes);
+  F.tins = new Set(DIM.tins);
+  F.bros = new Set(DIM.bros);
+
+  document.getElementById('hdrInfo').textContent = fname + ' · ' + fmtInt(DATA.length) + ' partidas enviadas · ' + fmtInt(DATAINT.length) + ' con registro interno';
+  FNAME = fname;
+  activarUI();
+  construirFiltros();
+  render();
+}
+
+function activarUI(){
+  zone.style.display='none';
+  document.getElementById('errBox').style.display='none';
+  document.getElementById('filtersBar').style.display='flex';
+  document.getElementById('tabsBar').style.display='flex';
+  document.getElementById('main').style.display='block';
+  document.getElementById('foot').style.display='block';
+}
+
+/* ================= FILTROS ================= */
+function construirFiltros(){
+  const cont = document.getElementById('fAnios');
+  cont.innerHTML='';
+  DIM.anios.forEach(a=>{
+    const b=document.createElement('button');
+    b.className='chip'+(a===F.anio?' on':''); b.textContent=a;
+    b.onclick=()=>{ F.anio=a; construirFiltros(); render(); };
+    cont.appendChild(b);
+  });
+  buildMsel('mselMes','Meses',DIM.meses,F.meses, m=>MES_CORTO[m]||m);
+  buildMsel('mselCli','Clientes',DIM.clientes,F.clientes, x=>x);
+  buildMsel('mselTin','Tintorerías',DIM.tins,F.tins, x=>x);
+  buildMsel('mselBro','Brokers',DIM.bros,F.bros, x=>x);
+}
+
+function buildMsel(id, nombre, opciones, setSel, lbl){
+  const box = document.getElementById(id);
+  const btn = box.querySelector('button');
+  const dd = box.querySelector('.dd');
+  const refreshBtn = ()=>{ btn.innerHTML = nombre + ' <span class="n">' + (setSel.size===opciones.length?'todos':setSel.size) + '</span> ▾'; };
+  refreshBtn();
+  dd.innerHTML = '<div class="acts"><a data-a="t">Todos</a><a data-a="n">Ninguno</a></div>';
+  opciones.forEach(o=>{
+    const l=document.createElement('label');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=setSel.has(o);
+    cb.onchange=()=>{ cb.checked?setSel.add(o):setSel.delete(o); refreshBtn(); render(); };
+    l.appendChild(cb); l.appendChild(document.createTextNode(' '+lbl(o)));
+    dd.appendChild(l);
+  });
+  dd.querySelector('[data-a=t]').onclick=()=>{ opciones.forEach(o=>setSel.add(o)); buildMsel(id,nombre,opciones,setSel,lbl); render(); box.classList.add('open'); };
+  dd.querySelector('[data-a=n]').onclick=()=>{ setSel.clear(); buildMsel(id,nombre,opciones,setSel,lbl); render(); box.classList.add('open'); };
+  btn.onclick=(e)=>{ e.stopPropagation(); document.querySelectorAll('.msel.open').forEach(m=>{ if(m!==box) m.classList.remove('open'); }); box.classList.toggle('open'); };
+  dd.onclick=e=>e.stopPropagation();
+}
+document.addEventListener('click', ()=>document.querySelectorAll('.msel.open').forEach(m=>m.classList.remove('open')));
+document.getElementById('btnReset').onclick=()=>{
+  F.anio=DIM.anios[DIM.anios.length-1];
+  F.meses=new Set(DIM.meses); F.clientes=new Set(DIM.clientes); F.tins=new Set(DIM.tins); F.bros=new Set(DIM.bros);
+  construirFiltros(); render();
+};
+
+/* Tabs */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    document.getElementById(t.dataset.v).classList.add('on');
+  };
+});
+
+/* ================= AGREGACIÓN ================= */
+const pasaFiltro = d => d.anio===F.anio && F.meses.has(d.mes) && F.clientes.has(d.item) && F.tins.has(d.tin) && F.bros.has(d.bro);
+
+// Status cliente con 4 categorías ('' = SIN RESPUESTA)
+function cuentaCli(arr){
+  const c = {APROBADO:0, RECHAZADO:0, PENDIENTE:0, SINRESP:0};
+  arr.forEach(d=>{
+    if(d.scli==='APROBADO') c.APROBADO++;
+    else if(d.scli==='RECHAZADO') c.RECHAZADO++;
+    else if(d.scli==='PENDIENTE') c.PENDIENTE++;
+    else c.SINRESP++;
+  });
+  c.resp = c.APROBADO + c.RECHAZADO + c.PENDIENTE;   // respondidas: denominador del % (convención del Excel)
+  c.total = c.resp + c.SINRESP;
+  return c;
+}
+
+// Conteo simple 3 categorías (interno / global)
+function cuenta3(arr, fn){
+  const c = {APROBADO:0, RECHAZADO:0, PENDIENTE:0};
+  arr.forEach(d=>{ const s=fn(d); if(c[s]!==undefined) c[s]++; });
+  c.total = c.APROBADO + c.RECHAZADO + c.PENDIENTE;
+  return c;
+}
+
+// Status global por partida (regla acordada — confirmar con Oscar)
+function statusGlobal(d){
+  if(d.scli==='RECHAZADO' || d.sint==='RECHAZADO') return 'RECHAZADO';
+  if(d.scli==='APROBADO') return 'APROBADO';
+  return 'PENDIENTE';   // pendiente marcado o sin respuesta del cliente
+}
+
+function porDim(arr, keyFn, cuentaFn){
+  const map = new Map();
+  arr.forEach(d=>{
+    const k = keyFn(d);
+    if(!map.has(k)) map.set(k, []);
+    map.get(k).push(d);
+  });
+  return [...map.entries()]
+    .map(([k, filas]) => ({k, filas, ...cuentaFn(filas)}))
+    .sort((a,b)=> b.total - a.total || a.k.localeCompare(b.k));
+}
+
+/* ================= RENDER ================= */
+function render(){
+  const base = DATA.filter(pasaFiltro);
+  const baseInt = DATAINT.filter(pasaFiltro);
+  renderGlobal(base, baseInt);
+  renderCliente(base);
+  renderInterno(base, baseInt);
+  renderCards(base);
+}
+
+/* ---- helpers visuales ---- */
+function kpi(lbl, val, cls, sub, primary){
+  return '<div class="kpi-card'+(primary?' primary':'')+'"><div class="lbl">'+lbl+'</div><div class="val '+(cls||'')+'">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+}
+function stackbar(segs, total){
+  if(!total) return '<div class="stackbar"></div>';
+  return '<div class="stackbar">' + segs.map(s=>'<div style="width:'+(s.v/total*100).toFixed(1)+'%;background:'+s.c+'"></div>').join('') + '</div>';
+}
+function badge(s){
+  if(s==='APROBADO') return '<span class="badge b-apro">APROBADO</span>';
+  if(s==='RECHAZADO') return '<span class="badge b-rech">RECHAZADO</span>';
+  if(s==='PENDIENTE') return '<span class="badge b-amb">PENDIENTE</span>';
+  return '<span class="badge b-gris">'+esc(s||'SIN RESPUESTA')+'</span>';
+}
+
+function filaDetalle(d, status){
+  return '<tr><td>'+badge(status)+'</td><td>'+(MES_CORTO[d.mes]||esc(d.mes))+'</td><td>'+esc(d.grupo)+'</td><td>'+esc(d.partida)+'</td><td>'+esc(d.color)+'</td><td>'+esc(d.art)+'</td><td>'+esc(d.tin)+'</td><td>'+esc(d.bro)+'</td><td>'+esc(d.fecha||'')+'</td><td>'+esc(d.com)+'</td></tr>';
+}
+const DET_HEAD = '<thead><tr><th>Status</th><th>Mes</th><th>Grupo</th><th>Partida</th><th>Color</th><th>Artículo</th><th>Tintorería</th><th>Broker</th><th>Fecha status</th><th>Comentario</th></tr></thead>';
+
+/* ---- Tabla ranking CLIENTE (4 categorías) ---- */
+function tablaCliente(contId, dims, titDim, prefijo){
+  const cont = document.getElementById(contId);
+  if(!dims.length){ cont.innerHTML='<div class="vacio">Sin datos para los filtros seleccionados.</div>'; return; }
+  let h = '<table><thead><tr><th>'+titDim+'</th><th class="num">Enviadas</th><th class="num">Resp.</th><th class="num">Aprob.</th><th class="num">Pend.</th><th class="num">Rech.</th><th class="num">Sin resp.</th><th class="num">% Aprob.</th><th class="num">% Rech.</th><th>Distribución</th><th></th></tr></thead><tbody>';
+  dims.forEach((r,i)=>{
+    const id = prefijo+'-'+i;
+    h += '<tr class="trow"><td><b>'+esc(r.k)+'</b></td>'+
+      '<td class="num">'+fmtInt(r.total)+'</td>'+
+      '<td class="num">'+fmtInt(r.resp)+'</td>'+
+      '<td class="num">'+fmtInt(r.APROBADO)+'</td>'+
+      '<td class="num">'+fmtInt(r.PENDIENTE)+'</td>'+
+      '<td class="num">'+fmtInt(r.RECHAZADO)+'</td>'+
+      '<td class="num gris">'+fmtInt(r.SINRESP)+'</td>'+
+      '<td class="num pct-apro">'+fmtPct(r.resp?r.APROBADO/r.resp:NaN)+'</td>'+
+      '<td class="num pct-rech">'+fmtPct(r.resp?r.RECHAZADO/r.resp:NaN)+'</td>'+
+      '<td>'+stackbar([{v:r.APROBADO,c:C.apro},{v:r.PENDIENTE,c:C.amb},{v:r.RECHAZADO,c:C.rech},{v:r.SINRESP,c:C.gris}], r.total)+'</td>'+
+      '<td><button class="btn-det" data-det="'+id+'">Detalle</button></td></tr>';
+    const orden = {RECHAZADO:0, PENDIENTE:1, '':2};
+    const problema = r.filas.filter(d=>d.scli!=='APROBADO').sort((a,b)=>orden[a.scli]-orden[b.scli]);
+    let det;
+    if(!problema.length){ det = '<div class="vacio">Todo aprobado en esta selección. ✔</div>'; }
+    else{
+      det = '<table class="dettbl">'+DET_HEAD+'<tbody>' + problema.map(d=>filaDetalle(d, d.scli)).join('') + '</tbody></table>';
+    }
+    h += '<tr class="detrow" id="'+id+'"><td colspan="11">'+det+'</td></tr>';
+  });
+  h += '</tbody></table>';
+  cont.innerHTML = h;
+  cont.querySelectorAll('.btn-det').forEach(b=>{ b.onclick=()=>document.getElementById(b.dataset.det).classList.toggle('open'); });
+}
+
+/* ---- Tabla ranking INTERNO (3 categorías) ---- */
+function tablaInterno(contId, dims, titDim, prefijo){
+  const cont = document.getElementById(contId);
+  if(!dims.length){ cont.innerHTML='<div class="vacio">Sin partidas con registro interno en esta selección.</div>'; return; }
+  let h = '<table><thead><tr><th>'+titDim+'</th><th class="num">Registradas</th><th class="num">Aprob.</th><th class="num">Pend.</th><th class="num">Rech.</th><th class="num">% Aprob.</th><th class="num">% Rech.</th><th>Distribución</th><th></th></tr></thead><tbody>';
+  dims.forEach((r,i)=>{
+    const id = prefijo+'-'+i;
+    h += '<tr class="trow"><td><b>'+esc(r.k)+'</b></td>'+
+      '<td class="num">'+fmtInt(r.total)+'</td>'+
+      '<td class="num">'+fmtInt(r.APROBADO)+'</td>'+
+      '<td class="num">'+fmtInt(r.PENDIENTE)+'</td>'+
+      '<td class="num">'+fmtInt(r.RECHAZADO)+'</td>'+
+      '<td class="num pct-apro">'+fmtPct(r.total?r.APROBADO/r.total:NaN)+'</td>'+
+      '<td class="num pct-rech">'+fmtPct(r.total?r.RECHAZADO/r.total:NaN)+'</td>'+
+      '<td>'+stackbar([{v:r.APROBADO,c:C.apro},{v:r.PENDIENTE,c:C.amb},{v:r.RECHAZADO,c:C.rech}], r.total)+'</td>'+
+      '<td><button class="btn-det" data-det="'+id+'">Detalle</button></td></tr>';
+    const problema = r.filas.filter(d=>d.sint!=='APROBADO').sort((a,b)=> a.sint==='RECHAZADO'?-1:1);
+    let det;
+    if(!problema.length){ det = '<div class="vacio">Sin rechazos ni pendientes internos en esta selección. ✔</div>'; }
+    else{
+      det = '<table class="dettbl">'+DET_HEAD+'<tbody>' + problema.map(d=>filaDetalle(d, d.sint)).join('') + '</tbody></table>';
+    }
+    h += '<tr class="detrow" id="'+id+'"><td colspan="9">'+det+'</td></tr>';
+  });
+  h += '</tbody></table>';
+  cont.innerHTML = h;
+  cont.querySelectorAll('.btn-det').forEach(b=>{ b.onclick=()=>document.getElementById(b.dataset.det).classList.toggle('open'); });
+}
+
+/* ---- Gráficos mensuales ---- */
+function chartMensualCliente(canvasId, arr){
+  const meses = MESES.filter(m => F.meses.has(m) && arr.some(d=>d.mes===m));
+  const series = meses.map(m => cuentaCli(arr.filter(d=>d.mes===m)));
+  dibujarBarras(canvasId, meses, [
+    {label:'Aprobado', data:series.map(s=>s.APROBADO), backgroundColor:C.apro},
+    {label:'Pendiente', data:series.map(s=>s.PENDIENTE), backgroundColor:C.amb},
+    {label:'Rechazado', data:series.map(s=>s.RECHAZADO), backgroundColor:C.rech},
+    {label:'Sin respuesta', data:series.map(s=>s.SINRESP), backgroundColor:C.gris}
+  ], series.map(s=>s.resp?+(s.APROBADO/s.resp*100).toFixed(1):null), '% Aprobado (sobre respondidas)');
+}
+
+function chartMensualInterno(canvasId, arr){
+  const meses = MESES.filter(m => F.meses.has(m) && arr.some(d=>d.mes===m));
+  const series = meses.map(m => cuenta3(arr.filter(d=>d.mes===m), d=>d.sint));
+  dibujarBarras(canvasId, meses, [
+    {label:'Aprobado', data:series.map(s=>s.APROBADO), backgroundColor:C.apro},
+    {label:'Pendiente', data:series.map(s=>s.PENDIENTE), backgroundColor:C.amb},
+    {label:'Rechazado', data:series.map(s=>s.RECHAZADO), backgroundColor:C.rech}
+  ], series.map(s=>s.total?+(s.APROBADO/s.total*100).toFixed(1):null), '% Aprobado');
+}
+
+function dibujarBarras(canvasId, meses, datasetsBarras, lineaPct, lineaLbl){
+  const cfg = {
+    type:'bar',
+    data:{
+      labels: meses.map(m=>MES_CORTO[m]||m),
+      datasets:[
+        ...datasetsBarras.map(d=>({...d, stack:'s', borderRadius:2})),
+        {label:lineaLbl, type:'line', data:lineaPct, borderColor:C.header, backgroundColor:C.header, borderWidth:3, tension:0.25, pointRadius:5, yAxisID:'y2'}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{grid:{display:false}},
+        y:{min:0, stacked:true, grid:{color:'#EDF2F0'}, title:{display:true, text:'Partidas'}},
+        y2:{min:0, max:100, position:'right', grid:{drawOnChartArea:false}, ticks:{callback:v=>v+'%'}, title:{display:true, text:'% Aprobado'}}
+      },
+      plugins:{
+        legend:{position:'bottom', labels:{usePointStyle:true, boxWidth:8}},
+        tooltip:{callbacks:{label:ctx=> ctx.dataset.type==='line' ? ' '+ctx.dataset.label+': '+ctx.parsed.y+'%' : ' '+ctx.dataset.label+': '+fmtInt(ctx.parsed.y)}}
+      }
+    }
+  };
+  if(charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), cfg);
+}
+
+/* ---- Vista RESUMEN GLOBAL ---- */
+function donut(canvasId, legId, items){
+  const visibles = items.filter(i=>i.val>0);
+  const total = items.reduce((s,i)=>s+i.val,0);
+  const cfg = {
+    type:'doughnut',
+    data:{
+      labels: visibles.map(i=>i.lbl),
+      datasets:[{ data: visibles.map(i=>i.val), backgroundColor: visibles.map(i=>i.color), borderColor:'#fff', borderWidth:2 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'55%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>{
+          const v = ctx.parsed;
+          return ' '+ctx.label+': '+fmtInt(v)+' ('+(total?(v/total*100).toFixed(1).replace('.',','):'0')+'%)';
+        }}}
+      }
+    }
+  };
+  if(charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), cfg);
+  document.getElementById(legId).innerHTML = items.map(i=>
+    '<div class="li"><span><span class="dot" style="background:'+i.color+'"></span>'+i.lbl+'</span>'+
+    '<span><span class="v">'+fmtInt(i.val)+'</span> · '+(total?(i.val/total*100).toFixed(1).replace('.',','):'0,0')+'%</span></div>'
+  ).join('') + '<div class="li"><span><b>Total</b></span><span class="v">'+fmtInt(total)+'</span></div>';
+}
+
+function renderGlobal(base, baseInt){
+  const cCli = cuentaCli(base);
+  const cInt = cuenta3(baseInt, d=>d.sint);
+  const sinRegInt = base.filter(d=>d.sint==='').length;
+  const cGlo = cuenta3(base, statusGlobal);
+  const fugas = base.filter(d=>d.sint==='APROBADO' && d.scli==='RECHAZADO').length;
+
+  document.getElementById('kpiGlobal').innerHTML =
+    kpi('% Aprobado global', fmtPct(cGlo.total?cGlo.APROBADO/cGlo.total:NaN), '', fmtInt(cGlo.APROBADO)+' de '+fmtInt(cGlo.total)+' enviadas', true) +
+    kpi('% Aprobado cliente', fmtPct(cCli.resp?cCli.APROBADO/cCli.resp:NaN), '', 'sobre '+fmtInt(cCli.resp)+' respondidas') +
+    kpi('% Aprobado interno', fmtPct(cInt.total?cInt.APROBADO/cInt.total:NaN), '', 'sobre '+fmtInt(cInt.total)+' registradas') +
+    kpi('Rechazadas (global)', fmtInt(cGlo.RECHAZADO), 'rech', fugas>0 ? fmtInt(fugas)+' fuga(s): aprobadas interno' : 'sin fugas del filtro interno') +
+    kpi('Pendientes (global)', fmtInt(cGlo.PENDIENTE), 'amb', 'incluye '+fmtInt(cCli.SINRESP)+' sin respuesta del cliente');
+
+  donut('pieCliente','legCliente',[
+    {lbl:'Aprobado', val:cCli.APROBADO, color:C.apro},
+    {lbl:'Pendiente', val:cCli.PENDIENTE, color:C.amb},
+    {lbl:'Rechazado', val:cCli.RECHAZADO, color:C.rech},
+    {lbl:'Sin respuesta', val:cCli.SINRESP, color:C.gris}
+  ]);
+  donut('pieInterno','legInterno',[
+    {lbl:'Aprobado', val:cInt.APROBADO, color:C.apro},
+    {lbl:'Pendiente', val:cInt.PENDIENTE, color:C.amb},
+    {lbl:'Rechazado', val:cInt.RECHAZADO, color:C.rech},
+    {lbl:'Sin registro', val:sinRegInt, color:C.gris}
+  ]);
+  donut('pieGlobal','legGlobal',[
+    {lbl:'Aprobado', val:cGlo.APROBADO, color:C.apro},
+    {lbl:'Pendiente', val:cGlo.PENDIENTE, color:C.amb},
+    {lbl:'Rechazado', val:cGlo.RECHAZADO, color:C.rech}
+  ]);
+}
+
+/* ---- Vista STATUS CLIENTE ---- */
+function renderCliente(base){
+  const c = cuentaCli(base);
+  document.getElementById('kpiCliente').innerHTML =
+    kpi('% Aprobado cliente', fmtPct(c.resp?c.APROBADO/c.resp:NaN), '', fmtInt(c.APROBADO)+' de '+fmtInt(c.resp)+' respondidas', true) +
+    kpi('Partidas enviadas', fmtInt(c.total), '', 'Año '+F.anio) +
+    kpi('Rechazadas', fmtInt(c.RECHAZADO), 'rech', fmtPct(c.resp?c.RECHAZADO/c.resp:NaN)+' de respondidas') +
+    kpi('Pendientes marcadas', fmtInt(c.PENDIENTE), 'amb', 'con respuesta "pendiente"') +
+    kpi('Sin respuesta', fmtInt(c.SINRESP), 'gris', fmtPct(c.total?c.SINRESP/c.total:NaN)+' de enviadas');
+  chartMensualCliente('chCliente', base);
+  tablaCliente('tblCliCliente', porDim(base, d=>d.item, cuentaCli), 'Cliente', 'dc');
+  tablaCliente('tblTinCliente', porDim(base, d=>d.tin, cuentaCli), 'Tintorería', 'dt');
+}
+
+/* ---- Vista STATUS INTERNO ---- */
+function renderInterno(base, baseInt){
+  const c = cuenta3(baseInt, d=>d.sint);
+  const sinReg = base.filter(d=>d.sint==='').length;
+  const fugas = base.filter(d=>d.sint==='APROBADO' && d.scli==='RECHAZADO').length;
+  document.getElementById('kpiInterno').innerHTML =
+    kpi('% Aprobado interno', fmtPct(c.total?c.APROBADO/c.total:NaN), '', fmtInt(c.APROBADO)+' de '+fmtInt(c.total)+' registradas', true) +
+    kpi('Con registro interno', fmtInt(c.total), '', 'de '+fmtInt(base.length)+' enviadas al cliente') +
+    kpi('Rechazadas internas', fmtInt(c.RECHAZADO), 'rech', 'detectadas antes del cliente') +
+    kpi('Fugas al cliente', fmtInt(fugas), fugas>0?'rech':'', 'aprobadas interno, rechazadas por cliente') +
+    kpi('Sin registro interno', fmtInt(sinReg), sinReg>0?'amb':'', 'partidas enviadas sin evaluación interna');
+  chartMensualInterno('chInterno', baseInt);
+  tablaInterno('tblCliInterno', porDim(baseInt, d=>d.item, arr=>cuenta3(arr, d=>d.sint)), 'Cliente', 'ic');
+  tablaInterno('tblTinInterno', porDim(baseInt, d=>d.tin, arr=>cuenta3(arr, d=>d.sint)), 'Tintorería', 'it');
+}
+
+/* ---- Vista TARJETAS ---- */
+function renderCards(base){
+  const grid = document.getElementById('cardsGrid');
+  const dims = porDim(base, d=>d.item, cuentaCli);
+  if(!dims.length){ grid.innerHTML='<div class="vacio">Sin datos para los filtros seleccionados.</div>'; return; }
+  grid.innerHTML = dims.map(r=>{
+    const p = n => r.resp ? fmtPct(n/r.resp) : '—';
+    return '<div class="ccard">'+
+      '<div class="top"><span class="cli">'+esc(r.k)+'</span><span class="tot">'+fmtInt(r.resp)+' respondidas</span></div>'+
+      '<div class="fila"><span>Aprobado</span><span class="p" style="color:'+C.apro+'">'+p(r.APROBADO)+'</span></div>'+
+      '<div class="fila"><span>Rechazado</span><span class="p" style="color:'+C.rech+'">'+p(r.RECHAZADO)+'</span></div>'+
+      '<div class="fila"><span>Pendiente</span><span class="p" style="color:#b98b1f">'+p(r.PENDIENTE)+'</span></div>'+
+      stackbar([{v:r.APROBADO,c:C.apro},{v:r.PENDIENTE,c:C.amb},{v:r.RECHAZADO,c:C.rech}], r.resp)+
+      (r.SINRESP ? '<div class="sinresp">+ '+fmtInt(r.SINRESP)+' sin respuesta ('+fmtInt(r.total)+' enviadas)</div>' : '')+
+      '</div>';
+  }).join('');
+}
+
+/* ================= EXPORTAR SNAPSHOT PARA OBSERVADORES ================= */
+document.getElementById('btnExport').onclick = exportarSnapshot;
+
+function exportarSnapshot(){
+  if(!DATA.length) return;
+  const clon = document.documentElement.cloneNode(true);
+  const prev = clon.querySelector('#snapshotData'); if(prev) prev.remove();
+  clon.querySelectorAll('canvas').forEach(c=>{ c.removeAttribute('width'); c.removeAttribute('height'); c.removeAttribute('style'); });
+  clon.querySelectorAll('.detrow.open').forEach(t=>t.classList.remove('open'));
+  clon.querySelectorAll('.msel.open').forEach(m=>m.classList.remove('open'));
+
+  const payload = {
+    data: DATA,
+    dataInt: DATAINT,
+    f: { anio:F.anio, meses:[...F.meses], clientes:[...F.clientes], tins:[...F.tins], bros:[...F.bros] },
+    fname: FNAME,
+    ts: new Date().toISOString()
+  };
+  const json = JSON.stringify(payload).replace(/</g,'\\u003c');
+  const s = document.createElement('script');
+  s.id = 'snapshotData';
+  s.textContent = 'window.__SNAPSHOT__=' + json + ';initSnapshot();';
+  clon.querySelector('body').appendChild(s);
+
+  const html = '<!DOCTYPE html>\n' + clon.outerHTML;
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const nombre = 'tono_' + F.anio + '_snapshot_' + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()) + '.html';
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+
+/* Arranque en modo snapshot: datos incrustados, sin carga de archivo */
+function initSnapshot(){
+  const S = window.__SNAPSHOT__;
+  if(!S || !S.data || !S.data.length) return;
+  DATA = S.data;
+  DATAINT = S.dataInt || [];
+  const todo = DATA.concat(DATAINT);
+  DIM.anios = [...new Set(todo.map(d=>d.anio))].sort((a,b)=>a-b);
+  DIM.meses = MESES.filter(m => todo.some(d=>d.mes===m));
+  DIM.clientes = [...new Set(todo.map(d=>d.item))].sort();
+  DIM.tins = [...new Set(todo.map(d=>d.tin))].sort();
+  DIM.bros = [...new Set(todo.map(d=>d.bro))].sort();
+  F.anio = DIM.anios.includes(S.f.anio) ? S.f.anio : DIM.anios[DIM.anios.length-1];
+  F.meses = new Set(S.f.meses.filter(x=>DIM.meses.includes(x)));
+  F.clientes = new Set(S.f.clientes.filter(x=>DIM.clientes.includes(x)));
+  F.tins = new Set(S.f.tins.filter(x=>DIM.tins.includes(x)));
+  F.bros = new Set(S.f.bros.filter(x=>DIM.bros.includes(x)));
+  FNAME = S.fname || '';
+  const d = new Date(S.ts);
+  document.getElementById('hdrInfo').textContent = FNAME + ' · Snapshot del ' +
+    d.toLocaleDateString('es-PE') + ' ' + d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}) +
+    ' · ' + fmtInt(DATA.length) + ' partidas';
+  activarUI();
+  document.getElementById('reload').style.display='none';   // observadores no cargan archivos
+  construirFiltros();
+  render();
+}
+</script>
+</body>
+</html>
